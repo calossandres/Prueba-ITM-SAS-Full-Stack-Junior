@@ -1,6 +1,7 @@
 node_modules/
 frontend/dist/
-.env
+.env*
+!.env.example
 backend/data/
 *.db
 *.db-shm
@@ -11,3 +12,4 @@ frontend/.next/
 backend/dist/
 *.tsbuildinfo
 frontend/next-env.d.ts
+
