@@ -1,0 +1,6 @@
+{
+  "name": "backend", "private": true,
+  "scripts": {"dev": "tsx watch src/main.ts", "build": "tsc", "start": "node dist/main.js", "typecheck": "tsc --noEmit", "test": "tsx --test test/*.test.ts"},
+  "dependencies": {"@nestjs/common": "^11.1.0", "@nestjs/core": "^11.1.0", "@nestjs/platform-express": "^11.1.0", "class-validator": "^0.14.2", "class-transformer": "^0.5.1", "dotenv": "^17.2.0", "pg": "^8.16.0", "reflect-metadata": "^0.2.2", "rxjs": "^7.8.2"},
+  "devDependencies": {"typescript": "^5.9.0", "tsx": "^4.20.0", "@types/node": "^24.0.0", "@types/pg": "^8.15.0", "supertest": "^7.1.0", "@types/supertest": "^6.0.0", "@electric-sql/pglite": "^0.3.14"}
+}
