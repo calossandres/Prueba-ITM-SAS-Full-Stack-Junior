@@ -151,10 +151,8 @@ docs/                     Explanations, API reference, and manual checks
 The detailed guides below are written in Spanish:
 
 - [Architecture and technical decisions](docs/ARQUITECTURA.md)
-- [Study guide and code walkthrough](docs/GUIA_ESTUDIO.md)
 - [REST API reference](docs/API.md)
 - [Manual verification and delivery](docs/VERIFICACION.md)
-- [Assessment requirements review and delivery status](docs/REVISION_ENTREGA.md)
 
 ## Git workflow and delivery
 
