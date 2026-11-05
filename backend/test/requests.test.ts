@@ -7,23 +7,30 @@ import { NestFactory } from '@nestjs/core';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { PGlite } from '@electric-sql/pglite';
 import request from 'supertest';
+import sharp from 'sharp';
 import { AppModule } from '../src/app.module';
 import { Database, throwDatabaseError } from '../src/database';
 import { STATUSES, TRANSITIONS } from '../src/domain';
 let app:INestApplication;
 let db:PGlite;
+const storedImages=new Map<string,Buffer>();
 const payload={ title:'Falla de conexión a red', description:'La conexión de la oficina deja de funcionar al iniciar.', requester:'Carlos Cabrera', category:'Red', priority:'Crítica' };
 before(async()=>{
   db=new PGlite();
   await db.exec('CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;');
   await db.exec(readFileSync(resolve(__dirname,'../../supabase/migrations/001_initial.sql'),'utf8'));
   await db.exec(readFileSync(resolve(__dirname,'../../supabase/migrations/002_supabase_rpc.sql'),'utf8'));
+  await db.exec(readFileSync(resolve(__dirname,'../../supabase/migrations/003_request_images.sql'),'utf8'));
+  await db.exec(readFileSync(resolve(__dirname,'../../supabase/migrations/005_atomic_creation_image.sql'),'utf8'));
   app=await NestFactory.create(AppModule,{logger:false});
   const provider=app.get(Database);
   provider.rpc=(async(operation:string,payload:object={})=>{
     try { const result=await db.query<{data:any}>('SELECT public.support_api($1,$2::jsonb) AS data',[operation,JSON.stringify(payload)]); return result.rows[0].data; }
     catch(error) { throwDatabaseError(error as {code?:string;message?:string}); }
   }) as any;
+  provider.uploadImage=async(path:string,contents:Buffer)=>{storedImages.set(path,contents);};
+  provider.removeImage=async(path:string)=>{storedImages.delete(path);};
+  provider.imageUrl=async(path:string)=>`https://images.example.test/${path}`;
   app.setGlobalPrefix('api');
   app.useGlobalPipes(new ValidationPipe({whitelist:true,forbidNonWhitelisted:true,transform:true}));
   await app.init();
@@ -116,4 +123,74 @@ test('RPC real revierte estado cuando un trigger impide escribir el historial',a
   finally{await db.exec('DROP TRIGGER test_history_failure ON public.request_history; DROP FUNCTION public.test_reject_history();');}
   const current=await request(server).get(`/api/requests/${created.body.id}`).expect(200);assert.equal(current.body.status,'Pendiente');
   const history=await request(server).get(`/api/requests/${created.body.id}/history`).expect(200);assert.equal(history.body.length,1);
+});
+
+test('Imagen: subir, reemplazar y retirar conserva una sola referencia e historial',async()=>{
+  const server=app.getHttpServer();const created=await request(server).post('/api/requests').send({...payload,priority:'Media'}).expect(201);const id=created.body.id;
+  const image=await sharp({create:{width:48,height:32,channels:3,background:'#226947'}}).png().toBuffer();
+  const initial=await request(server).post(`/api/requests/${id}/image`).field('actor','Carlos').attach('image',image,{filename:'captura.png',contentType:'image/png'}).expect(201);
+  assert.match(initial.body.image_path,new RegExp(`^${id}/.+\\.webp$`));assert.ok(storedImages.has(initial.body.image_path));
+  const bytes=storedImages.get(initial.body.image_path)!;assert.equal((await sharp(bytes).metadata()).format,'webp');
+  const replaced=await request(server).post(`/api/requests/${id}/image`).field('actor','Carlos').attach('image',image,{filename:'otra.png',contentType:'image/png'}).expect(201);
+  assert.notEqual(replaced.body.image_path,initial.body.image_path);assert.equal(storedImages.has(initial.body.image_path),false);
+  const detail=await request(server).get(`/api/requests/${id}`).expect(200);assert.ok(detail.body.image_url.startsWith('https://images.example.test/'));
+  await request(server).delete(`/api/requests/${id}/image`).send({actor:'Carlos'}).expect(200);
+  assert.equal(storedImages.has(replaced.body.image_path),false);
+  const cleared=await request(server).get(`/api/requests/${id}`).expect(200);assert.equal(cleared.body.image_path,null);assert.equal(cleared.body.image_url,null);
+  const history=await request(server).get(`/api/requests/${id}/history`).expect(200);assert.equal(history.body.length,4);assert.ok(history.body[0].changes.image_path);
+});
+test('Imagen: rechaza contenido falso, archivos múltiples, actor inválido y exceso de payload',async()=>{
+  const server=app.getHttpServer();const created=await request(server).post('/api/requests').send(payload).expect(201);const url=`/api/requests/${created.body.id}/image`;
+  await request(server).post(url).field('actor','Carlos').attach('image',Buffer.from('<script>alert(1)</script>'),{filename:'fake.png',contentType:'image/png'}).expect(400);
+  await request(server).post(url).field('actor','Carlos').expect(400);
+  const image=await sharp({create:{width:8,height:8,channels:3,background:'#fff'}}).png().toBuffer();
+  await request(server).post(url).field('actor','x').attach('image',image,'a.png').expect(400);
+  await request(server).post(url).field('actor','Carlos').attach('image',image,'a.png').attach('image',image,'b.png').expect(400);
+  await request(server).post(url).field('actor','Carlos').attach('image',Buffer.alloc(3*1024*1024+1),'grande.png').expect(413);
+});
+test('Imagen: no se modifica una solicitud cerrada',async()=>{
+  const server=app.getHttpServer();const created=await request(server).post('/api/requests').send(payload).expect(201);const id=created.body.id;
+  await request(server).patch(`/api/requests/${id}/status`).send({status:'Cancelada',actor:'Carlos'}).expect(200);
+  const image=await sharp({create:{width:8,height:8,channels:3,background:'#fff'}}).png().toBuffer();
+  await request(server).post(`/api/requests/${id}/image`).field('actor','Carlos').attach('image',image,'a.png').expect(409);
+  await request(server).delete(`/api/requests/${id}/image`).send({actor:'Carlos'}).expect(409);
+});
+test('Imagen: si falla la asociación se elimina el archivo recién subido',async()=>{
+  const server=app.getHttpServer();const created=await request(server).post('/api/requests').send(payload).expect(201);
+  const provider=app.get(Database);const original=provider.rpc;const count=storedImages.size;
+  provider.rpc=(async(operation:string,data:object)=>{if(operation==='image')throw new Error('Fallo simulado');return original(operation,data);}) as any;
+  const image=await sharp({create:{width:8,height:8,channels:3,background:'#fff'}}).png().toBuffer();
+  try{await request(server).post(`/api/requests/${created.body.id}/image`).field('actor','Carlos').attach('image',image,'a.png').expect(500);}
+  finally{provider.rpc=original;}
+  assert.equal(storedImages.size,count);
+  const detail=await request(server).get(`/api/requests/${created.body.id}`).expect(200);assert.equal(detail.body.image_path,null);
+});
+
+test('Crear con imagen genera solo Creación; reemplazar después genera Edición',async()=>{
+  const server=app.getHttpServer();const image=await sharp({create:{width:32,height:24,channels:3,background:'#226947'}}).png().toBuffer();
+  let creation=request(server).post('/api/requests');for(const [field,value] of Object.entries(payload))creation=creation.field(field,value);
+  const result=await creation.attach('image',image,{filename:'inicial.png',contentType:'image/png'}).expect(201);
+  assert.ok(result.body.image_path);assert.ok(storedImages.has(result.body.image_path));
+  const initial=await request(server).get(`/api/requests/${result.body.id}/history`).expect(200);
+  assert.equal(initial.body.length,1);assert.equal(initial.body[0].kind,'Creación');
+  assert.match(initial.body[0].observation,/con imagen/);
+  await request(server).post(`/api/requests/${result.body.id}/image`).field('actor','Técnico').attach('image',image,{filename:'solucion.png',contentType:'image/png'}).expect(201);
+  const later=await request(server).get(`/api/requests/${result.body.id}/history`).expect(200);
+  assert.equal(later.body.length,2);assert.equal(later.body[0].kind,'Edición');assert.equal(later.body[0].actor,'Técnico');
+});
+test('Crear con imagen inválida no crea solicitud ni historial',async()=>{
+  const server=app.getHttpServer();const before=await db.query<{total:number}>('SELECT count(*)::int AS total FROM support_requests');
+  let creation=request(server).post('/api/requests');for(const [field,value] of Object.entries(payload))creation=creation.field(field,value);
+  await creation.attach('image',Buffer.from('no es una imagen'),{filename:'falso.png',contentType:'image/png'}).expect(400);
+  const after=await db.query<{total:number}>('SELECT count(*)::int AS total FROM support_requests');assert.equal(after.rows[0].total,before.rows[0].total);
+});
+
+test('Imagen inicial: exige migración atómica antes de subir o crear datos',async()=>{
+  const server=app.getHttpServer();const provider=app.get(Database);const original=provider.rpc;const count=storedImages.size;
+  provider.rpc=(async(operation:string,data:object)=>operation==='health'?{status:'ok'}:original(operation,data)) as any;
+  const image=await sharp({create:{width:8,height:8,channels:3,background:'#fff'}}).png().toBuffer();
+  let creation=request(server).post('/api/requests');for(const [field,value] of Object.entries(payload))creation=creation.field(field,value);
+  try{const result=await creation.attach('image',image,{filename:'inicial.png',contentType:'image/png'}).expect(503);assert.match(result.body.message,/005_atomic/);}
+  finally{provider.rpc=original;}
+  assert.equal(storedImages.size,count);
 });

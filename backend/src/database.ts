@@ -24,4 +24,18 @@ export class Database {
     if (error) throwDatabaseError(error);
     return data as T;
   }
+  private readonly imageBucket = 'request-images';
+  async uploadImage(path: string, contents: Buffer) {
+    const { error } = await this.getClient().storage.from(this.imageBucket).upload(path, contents, { contentType: 'image/webp', upsert: false });
+    if (error) throwDatabaseError({ code: 'STORAGE_UPLOAD' });
+  }
+  async removeImage(path: string) {
+    const { error } = await this.getClient().storage.from(this.imageBucket).remove([path]);
+    if (error) throwDatabaseError({ code: 'STORAGE_DELETE' });
+  }
+  async imageUrl(path: string): Promise<string> {
+    const { data, error } = await this.getClient().storage.from(this.imageBucket).createSignedUrl(path, 600);
+    if (error) throwDatabaseError({ code: 'STORAGE_READ' });
+    return data.signedUrl;
+  }
 }

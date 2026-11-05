@@ -14,6 +14,6 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
   app.enableCors({ origin: process.env.FRONTEND_ORIGIN || 'http://localhost:3000' });
   app.enableShutdownHooks();
-  await app.listen(Number(process.env.PORT || 3001), '127.0.0.1');
+  await app.listen(Number(process.env.PORT || 3001), process.env.VERCEL ? '0.0.0.0' : '127.0.0.1');
 }
 bootstrap().catch(error => { console.error(error); process.exitCode = 1; });
