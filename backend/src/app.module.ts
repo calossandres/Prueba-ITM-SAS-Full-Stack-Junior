@@ -15,7 +15,7 @@ class RequestsController {
 @Controller('health')
 class HealthController {
   constructor(@Inject(Database) private readonly db: Database) {}
-  @Get() async health() { await this.db.query('SELECT 1'); return { status: 'ok', database: 'PostgreSQL' }; }
+  @Get() async health() { return this.db.rpc('health'); }
 }
 @Module({ controllers: [RequestsController, HealthController], providers: [Database, RequestsService] })
 export class AppModule {}
