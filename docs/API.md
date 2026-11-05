@@ -75,3 +75,11 @@ El historial devuelve una lista de eventos con kind, from_status, to_status, act
 - 503: Supabase no disponible, clave/URL incorrecta o función RPC pendiente de configurar.
 
 La API no implementa autenticación de usuarios; el campo actor es declarativo. La clave del proveedor nunca forma parte de las respuestas.
+
+## Imagen opcional
+
+POST /requests acepta también multipart/form-data con los cinco campos de creación y un archivo image. El registro con imagen genera un único evento Creación. El original se optimiza en el navegador; el backend valida y recodifica el resultado.
+
+POST /requests/:id/image permite añadir o reemplazar la imagen de una solicitud abierta mediante multipart con actor e image. DELETE /requests/:id/image recibe JSON con actor para retirarla. Estos cambios posteriores generan un evento Edición. GET /requests/:id añade image_path e image_url firmada.
+
+Consultar [IMAGENES.md](IMAGENES.md) para límites, almacenamiento y consistencia.

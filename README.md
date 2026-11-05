@@ -1,5 +1,7 @@
 # Mesa · Gestión de soporte interno
 
+**Español** | [English](README.en.md)
+
 Prueba técnica Full Stack Junior: aplicación para registrar y seguir solicitudes internas de soporte tecnológico.
 
 ## Tecnologías
@@ -58,8 +60,11 @@ En el SQL Editor del proyecto de la prueba, ejecuta en este orden:
 
 1. `supabase/migrations/001_initial.sql`: tablas, índices y RLS.
 2. `supabase/migrations/002_supabase_rpc.sql`: función transaccional y permisos de ejecución.
+3. `supabase/migrations/003_request_images.sql`: referencias de imagen y cambios auditados.
+4. `supabase/migrations/004_image_storage.sql`: bucket privado de imágenes.
+5. `supabase/migrations/005_atomic_creation_image.sql`: creación con imagen sin edición automática.
 
-Si ya creaste `support_requests` y `request_history` con el esquema de esta aplicación, ejecuta solamente la segunda migración. No necesitas borrar tablas ni datos para cambiar al cliente de Supabase.
+Si ya creaste `support_requests` y `request_history` con el esquema de esta aplicación, ejecuta las migraciones pendientes en orden. No necesitas borrar tablas ni datos para cambiar al cliente de Supabase.
 
 Estas migraciones se ejecutan en el SQL Editor con privilegios de administración. La función `support_api` solo es ejecutable por `service_role`; no se habilita acceso anónimo. La clave secreta permanece en el backend.
 
@@ -103,7 +108,7 @@ npm start -w backend
 npm start -w frontend
 ```
 
-Ejecuta esos comandos en dos terminales y detén primero los servidores de desarrollo. Este proyecto no incluye despliegue remoto automatizado.
+Ejecuta esos comandos en dos terminales y detén primero los servidores de desarrollo. Consulta la guía de Vercel para publicar ambos proyectos.
 
 ## Funcionalidades y reglas
 
@@ -154,3 +159,14 @@ No se implementó inicio de sesión, porque no lo exige la prueba. El nombre del
 
 Se utilizó asistencia de IA para implementación y revisión. El candidato debe estudiar, ejecutar y verificar el código y ser capaz de explicarlo y modificarlo durante la revisión técnica.
 
+## Imágenes y demo en Vercel
+
+Una imagen opcional por solicitud, con un máximo original de 500 MB. El navegador la optimiza antes de enviarla; NestJS valida y recodifica el archivo y Supabase lo guarda en un bucket privado. Crear con imagen genera un solo evento Creación; los cambios posteriores de imagen generan Edición.
+
+`npm run dev` espera a que la API esté disponible antes de iniciar Next.js. El frontend también muestra el estado de conexión durante el arranque.
+
+Se publican dos proyectos Vercel del mismo monorepo: `backend` (NestJS) y `frontend` (Next.js). Las claves de Supabase quedan solo en el backend; el frontend usa `API_URL`.
+
+- [Pasos para publicar en Vercel](docs/VERCEL.md)
+- [Configuración y comportamiento de imágenes](docs/IMAGENES.md)
+- [Enunciado original de la prueba](docs/PRUEBA_TECNICA.pdf)

@@ -65,3 +65,13 @@ Arquitectura y supuestos: ARQUITECTURA.md.
 7. Confirmar que el repositorio sea público y entregar su URL.
 
 La publicación remota y los resultados manuales deben verificarse antes de declarar la entrega completa.
+
+## Imagen e historial inicial
+
+- Crear con imagen: exactamente un evento Creación.
+- Añadir o reemplazar una imagen después: nuevo evento Edición con responsable y fecha.
+- Archivo inválido durante la creación: no debe quedar una solicitud creada parcialmente.
+- Intentar una imagen original mayor de 500 MB: se rechaza antes de leerla completa.
+- Verificar que el enlace de detalle abre la imagen ampliada y que el bucket no es público.
+
+Aplicar primero las migraciones 003, 004 y 005. Las pruebas automáticas actuales incluyen estas reglas; el informe de revisión registra 34 casos.

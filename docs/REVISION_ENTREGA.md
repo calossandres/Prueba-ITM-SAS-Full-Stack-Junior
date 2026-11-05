@@ -4,7 +4,7 @@ Fecha: 4 de noviembre de 2026.
 
 ## Resultado
 
-La implementación cubre los requisitos funcionales obligatorios revisados en el PDF. La conexión real a Supabase y la consulta del listado están verificadas. La entrega Git aún requiere guardar y subir el avance final e integrar develop hacia main.
+La implementación cubre los requisitos funcionales obligatorios revisados en el PDF. La conexión real a Supabase y la consulta del listado están verificadas. La entrega Git se cierra con los commits de los avances y una integración de develop hacia main. La subida remota debe confirmarse en GitHub Desktop.
 
 ## Matriz de cumplimiento
 
@@ -35,13 +35,13 @@ La implementación cubre los requisitos funcionales obligatorios revisados en el
 | Supuestos y reglas adicionales | ARQUITECTURA.md | Documentado |
 | Código frontend/backend y scripts SQL | frontend/, backend/, supabase/migrations/ | Disponibles localmente |
 | main y develop | Ambas existen localmente | Verificado |
-| Mínimo cinco commits | Seis commits anteriores al avance actual | Cumplido localmente |
-| Integración develop hacia main | main todavía señala Initial commit | PENDIENTE |
-| Repositorio disponible y público | Remoto configurado; visibilidad no confirmada por el conector | PENDIENTE DE CONFIRMAR |
+| Mínimo cinco commits | Historial con más de cinco commits | Cumplido localmente |
+| Integración develop hacia main | Verificar el commit de merge al cierre con git log --merges main | Verificación final de Git |
+| Repositorio público | Captura del usuario muestra Public; confirmar la subida de main al entregar | Subida final pendiente |
 
 ## Comprobaciones ejecutadas
 
-- `npm test`: 25 pruebas aprobadas, 0 fallos.
+- `npm test`: 34 pruebas aprobadas, 0 fallos.
 - Las 16 combinaciones de estados se prueban por HTTP contra la función SQL en PGlite.
 - Se verifica que la prioridad crítica requiera observación, el historial de edición y estado, filtros, búsqueda, orden y paginación.
 - Se verifica rechazo a anon/authenticated y acceso de service_role en el motor de prueba.
@@ -77,7 +77,7 @@ Description:
 Sustituye la conexión PostgreSQL directa por supabase-js.
 Configura SUPABASE_URL y SUPABASE_SECRET_KEY solo en NestJS.
 Añade funciones RPC transaccionales para solicitudes e historial.
-Verifica reglas, permisos y rollback con 25 pruebas automatizadas.
+Verifica reglas, permisos y rollback con 34 pruebas automatizadas.
 Documenta instalación, arquitectura, API, revisión y guía de estudio.
 Añade el flujo de verificación automática en GitHub Actions.
 ```
@@ -93,3 +93,7 @@ Añade el flujo de verificación automática en GitHub Actions.
 7. Entregar la URL del repositorio con main mostrando el código y el README completo.
 
 No declarar la entrega completa hasta comprobar esos últimos pasos. El usuario conserva el control de los commits y de la subida mediante GitHub Desktop.
+
+## Ampliación: imagen y demo
+
+Se añadieron imagen opcional con límite original de 500 MB, optimización local, bucket privado, enlaces firmados e historial sin edición automática al crear con imagen. Frontend separado en componentes y arranque condicionado a salud de la API. Consultar IMAGENES.md y VERCEL.md. Las pruebas de navegador adicionales no se añadieron por indicación del usuario.

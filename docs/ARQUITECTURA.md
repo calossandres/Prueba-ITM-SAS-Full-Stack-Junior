@@ -54,3 +54,11 @@ La clave secreta puede acceder al proyecto: no es una credencial para frontend. 
 ## Mejoras futuras
 
 Autenticación y roles, identidad verificada del responsable, pruebas de concurrencia contra PostgreSQL completo, auditoría de acceso, índices de búsqueda para grandes volúmenes y despliegue separado de frontend/backend. No se presentan como funcionalidades ya implementadas.
+
+## Ampliación de imágenes y frontend
+
+El formulario envía la imagen inicial junto con los datos de la solicitud. El backend valida el archivo, lo sube al bucket privado y llama a create con la referencia. La fila y su evento Creación se insertan en una transacción. Si la llamada falla, se intenta eliminar el archivo subido. Los cambios posteriores de imagen usan image y generan Edición; el registro inicial no se presenta como una edición.
+
+La ruta frontend/app/page.tsx contiene la entrada a SupportDashboard. Los componentes RequestForm, RequestFilters, RequestList, RequestHistory y RequestImage separan presentación e interacción. Los helpers de API, conexión y procesamiento de imágenes están en frontend/lib.
+
+El arranque local espera la salud de NestJS antes de iniciar Next.js. Para Vercel, se usan dos proyectos del mismo repositorio y un proxy configurado con API_URL. Consultar VERCEL.md.
