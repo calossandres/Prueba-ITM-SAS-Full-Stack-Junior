@@ -140,10 +140,8 @@ docs/                     Explicación, API y verificación manual
 ```
 
 - [Arquitectura y decisiones](docs/ARQUITECTURA.md)
-- [Guía para comprender y explicar el código](docs/GUIA_ESTUDIO.md)
 - [API REST](docs/API.md)
 - [Verificación manual y entrega](docs/VERIFICACION.md)
-- [Revisión frente al enunciado y estado de entrega](docs/REVISION_ENTREGA.md)
 
 ## Git y entrega
 
