@@ -27,7 +27,3 @@ export class ListDto {
   @IsIn(['created_at', 'updated_at', 'title', 'priority']) sort = 'created_at';
   @IsIn(['asc', 'desc']) order = 'desc';
 }
-
-export class ImageActorDto {
-  @Trim() @IsString() @Length(2, 100) actor!: string;
-}

@@ -63,6 +63,7 @@ Run these scripts in order in your assessment project's SQL Editor:
 3. `supabase/migrations/003_request_images.sql`: image references and audited updates.
 4. `supabase/migrations/004_image_storage.sql`: private image bucket.
 5. `supabase/migrations/005_atomic_creation_image.sql`: one creation event when registering a request with an image.
+6. `supabase/migrations/006_problem_and_solution_images.sql`: immutable problem image and separate evidence of resolution.
 
 If `support_requests` and `request_history` already exist with this application's schema, run the pending migrations in order. Switching to the Supabase client does not require deleting tables or data.
 
@@ -170,7 +171,7 @@ AI assistance was used for implementation and review. The candidate must study, 
 
 ## Images and Vercel demo
 
-One optional image per request, with an original-file limit of 500 MB. The browser optimizes it before upload; NestJS validates and re-encodes it, and Supabase stores it in a private bucket. Creating with an image generates one Creation event. Later image changes generate an Edit event.
+Up to two optional images per request: the problem image at creation and a separate solution image when resolving it. Saved evidence cannot be replaced or deleted. Each original may be up to 500 MB and is optimized before upload to private Storage. Initial attachment generates one Creation event; a solution attachment generates a dedicated evidence event with its actor and timestamp.
 
 `npm run dev` waits for the API health check before starting Next.js. The frontend also shows a connection state while the API is starting.
 

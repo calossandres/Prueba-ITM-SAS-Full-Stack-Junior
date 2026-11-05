@@ -14,6 +14,10 @@ export type RequestItem = {
     updated_at: string;
     image_path?: string | null;
     image_url?: string | null;
+    solution_image_path?: string | null;
+    solution_image_url?: string | null;
+    solution_image_actor?: string | null;
+    solution_image_at?: string | null;
 };
 export type HistoryItem = {
     id: string;
