@@ -1,0 +1,15 @@
+node_modules/
+frontend/dist/
+.env*
+!.env.example
+backend/data/
+*.db
+*.db-shm
+*.db-wal
+coverage/
+tmp/
+frontend/.next/
+backend/dist/
+*.tsbuildinfo
+frontend/next-env.d.ts
+
