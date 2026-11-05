@@ -57,7 +57,7 @@ Autenticación y roles, identidad verificada del responsable, pruebas de concurr
 
 ## Ampliación de imágenes y frontend
 
-El formulario envía la imagen inicial junto con los datos de la solicitud. El backend valida el archivo, lo sube al bucket privado y llama a create con la referencia. La fila y su evento Creación se insertan en una transacción. Si la llamada falla, se intenta eliminar el archivo subido. Los cambios posteriores de imagen usan image y generan Edición; el registro inicial no se presenta como una edición.
+El formulario envía la imagen inicial junto con los datos de la solicitud. El backend valida el archivo, lo sube al bucket privado y llama a create con la referencia. La fila y su evento Creación se insertan en una transacción. Si la llamada falla, se intenta eliminar el archivo subido. La imagen inicial es inmutable. Una segunda imagen opcional se admite al resolver; el cambio de estado, la referencia, el responsable y la fecha se guardan junto con un evento Evidencia. Las comprobaciones SQL y un trigger impiden reemplazar o borrar evidencias ya confirmadas.
 
 La ruta frontend/app/page.tsx contiene la entrada a SupportDashboard. Los componentes RequestForm, RequestFilters, RequestList, RequestHistory y RequestImage separan presentación e interacción. Los helpers de API, conexión y procesamiento de imágenes están en frontend/lib.
 

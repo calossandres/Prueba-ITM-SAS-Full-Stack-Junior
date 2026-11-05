@@ -63,6 +63,7 @@ En el SQL Editor del proyecto de la prueba, ejecuta en este orden:
 3. `supabase/migrations/003_request_images.sql`: referencias de imagen y cambios auditados.
 4. `supabase/migrations/004_image_storage.sql`: bucket privado de imágenes.
 5. `supabase/migrations/005_atomic_creation_image.sql`: creación con imagen sin edición automática.
+6. `supabase/migrations/006_problem_and_solution_images.sql`: imagen original inmutable y evidencia independiente al resolver.
 
 Si ya creaste `support_requests` y `request_history` con el esquema de esta aplicación, ejecuta las migraciones pendientes en orden. No necesitas borrar tablas ni datos para cambiar al cliente de Supabase.
 
@@ -159,7 +160,7 @@ Se utilizó asistencia de IA para implementación y revisión. El candidato debe
 
 ## Imágenes y demo en Vercel
 
-Una imagen opcional por solicitud, con un máximo original de 500 MB. El navegador la optimiza antes de enviarla; NestJS valida y recodifica el archivo y Supabase lo guarda en un bucket privado. Crear con imagen genera un solo evento Creación; los cambios posteriores de imagen generan Edición.
+Hasta dos imágenes opcionales por solicitud: una del problema al crear y otra de la solución al resolver. Las evidencias guardadas no se reemplazan ni se borran. Cada original admite hasta 500 MB y se optimiza antes de subirlo al bucket privado. Crear con imagen genera una Creación; resolver con captura añade el evento Evidencia de solución añadida, con responsable y fecha.
 
 `npm run dev` espera a que la API esté disponible antes de iniciar Next.js. El frontend también muestra el estado de conexión durante el arranque.
 

@@ -12,7 +12,7 @@ class RequestsController {
   @Get(':id/history') history(@Param('id', new ParseUUIDPipe()) id: string) { return this.requests.history(id); }
 
   @Put(':id') update(@Param('id', new ParseUUIDPipe()) id: string, @Body() data: UpdateRequestDto) { return this.requests.update(id, data); }
-  @Patch(':id/status') status(@Param('id', new ParseUUIDPipe()) id: string, @Body() data: StatusDto) { return this.requests.changeStatus(id, data); }
+
 }
 @Controller('health')
 class HealthController {

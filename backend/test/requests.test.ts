@@ -22,6 +22,7 @@ before(async()=>{
   await db.exec(readFileSync(resolve(__dirname,'../../supabase/migrations/002_supabase_rpc.sql'),'utf8'));
   await db.exec(readFileSync(resolve(__dirname,'../../supabase/migrations/003_request_images.sql'),'utf8'));
   await db.exec(readFileSync(resolve(__dirname,'../../supabase/migrations/005_atomic_creation_image.sql'),'utf8'));
+  await db.exec(readFileSync(resolve(__dirname,'../../supabase/migrations/006_problem_and_solution_images.sql'),'utf8'));
   app=await NestFactory.create(AppModule,{logger:false});
   const provider=app.get(Database);
   provider.rpc=(async(operation:string,payload:object={})=>{
@@ -125,58 +126,98 @@ test('RPC real revierte estado cuando un trigger impide escribir el historial',a
   const history=await request(server).get(`/api/requests/${created.body.id}/history`).expect(200);assert.equal(history.body.length,1);
 });
 
-test('Imagen: subir, reemplazar y retirar conserva una sola referencia e historial',async()=>{
-  const server=app.getHttpServer();const created=await request(server).post('/api/requests').send({...payload,priority:'Media'}).expect(201);const id=created.body.id;
-  const image=await sharp({create:{width:48,height:32,channels:3,background:'#226947'}}).png().toBuffer();
-  const initial=await request(server).post(`/api/requests/${id}/image`).field('actor','Carlos').attach('image',image,{filename:'captura.png',contentType:'image/png'}).expect(201);
-  assert.match(initial.body.image_path,new RegExp(`^${id}/.+\\.webp$`));assert.ok(storedImages.has(initial.body.image_path));
-  const bytes=storedImages.get(initial.body.image_path)!;assert.equal((await sharp(bytes).metadata()).format,'webp');
-  const replaced=await request(server).post(`/api/requests/${id}/image`).field('actor','Carlos').attach('image',image,{filename:'otra.png',contentType:'image/png'}).expect(201);
-  assert.notEqual(replaced.body.image_path,initial.body.image_path);assert.equal(storedImages.has(initial.body.image_path),false);
-  const detail=await request(server).get(`/api/requests/${id}`).expect(200);assert.ok(detail.body.image_url.startsWith('https://images.example.test/'));
-  await request(server).delete(`/api/requests/${id}/image`).send({actor:'Carlos'}).expect(200);
-  assert.equal(storedImages.has(replaced.body.image_path),false);
-  const cleared=await request(server).get(`/api/requests/${id}`).expect(200);assert.equal(cleared.body.image_path,null);assert.equal(cleared.body.image_url,null);
-  const history=await request(server).get(`/api/requests/${id}/history`).expect(200);assert.equal(history.body.length,4);assert.ok(history.body[0].changes.image_path);
-});
-test('Imagen: rechaza contenido falso, archivos múltiples, actor inválido y exceso de payload',async()=>{
-  const server=app.getHttpServer();const created=await request(server).post('/api/requests').send(payload).expect(201);const url=`/api/requests/${created.body.id}/image`;
-  await request(server).post(url).field('actor','Carlos').attach('image',Buffer.from('<script>alert(1)</script>'),{filename:'fake.png',contentType:'image/png'}).expect(400);
-  await request(server).post(url).field('actor','Carlos').expect(400);
-  const image=await sharp({create:{width:8,height:8,channels:3,background:'#fff'}}).png().toBuffer();
-  await request(server).post(url).field('actor','x').attach('image',image,'a.png').expect(400);
-  await request(server).post(url).field('actor','Carlos').attach('image',image,'a.png').attach('image',image,'b.png').expect(400);
-  await request(server).post(url).field('actor','Carlos').attach('image',Buffer.alloc(3*1024*1024+1),'grande.png').expect(413);
-});
-test('Imagen: no se modifica una solicitud cerrada',async()=>{
-  const server=app.getHttpServer();const created=await request(server).post('/api/requests').send(payload).expect(201);const id=created.body.id;
-  await request(server).patch(`/api/requests/${id}/status`).send({status:'Cancelada',actor:'Carlos'}).expect(200);
-  const image=await sharp({create:{width:8,height:8,channels:3,background:'#fff'}}).png().toBuffer();
-  await request(server).post(`/api/requests/${id}/image`).field('actor','Carlos').attach('image',image,'a.png').expect(409);
-  await request(server).delete(`/api/requests/${id}/image`).send({actor:'Carlos'}).expect(409);
-});
-test('Imagen: si falla la asociación se elimina el archivo recién subido',async()=>{
-  const server=app.getHttpServer();const created=await request(server).post('/api/requests').send(payload).expect(201);
-  const provider=app.get(Database);const original=provider.rpc;const count=storedImages.size;
-  provider.rpc=(async(operation:string,data:object)=>{if(operation==='image')throw new Error('Fallo simulado');return original(operation,data);}) as any;
-  const image=await sharp({create:{width:8,height:8,channels:3,background:'#fff'}}).png().toBuffer();
-  try{await request(server).post(`/api/requests/${created.body.id}/image`).field('actor','Carlos').attach('image',image,'a.png').expect(500);}
-  finally{provider.rpc=original;}
-  assert.equal(storedImages.size,count);
-  const detail=await request(server).get(`/api/requests/${created.body.id}`).expect(200);assert.equal(detail.body.image_path,null);
-});
+async function picture() {
+  return sharp({create:{width:48,height:32,channels:3,background:'#226947'}}).png().toBuffer();
+}
+async function createWithProblemImage(priority='Media') {
+  let creation=request(app.getHttpServer()).post('/api/requests');
+  for(const [field,value] of Object.entries({...payload,priority}))creation=creation.field(field,value);
+  return creation.attach('image',await picture(),{filename:'problema.png',contentType:'image/png'}).expect(201);
+}
+async function beginWork(id:string) {
+  await request(app.getHttpServer()).patch(`/api/requests/${id}/status`).send({status:'En progreso',actor:'Técnico'}).expect(200);
+}
 
-test('Crear con imagen genera solo Creación; reemplazar después genera Edición',async()=>{
-  const server=app.getHttpServer();const image=await sharp({create:{width:32,height:24,channels:3,background:'#226947'}}).png().toBuffer();
-  let creation=request(server).post('/api/requests');for(const [field,value] of Object.entries(payload))creation=creation.field(field,value);
-  const result=await creation.attach('image',image,{filename:'inicial.png',contentType:'image/png'}).expect(201);
-  assert.ok(result.body.image_path);assert.ok(storedImages.has(result.body.image_path));
-  const initial=await request(server).get(`/api/requests/${result.body.id}/history`).expect(200);
-  assert.equal(initial.body.length,1);assert.equal(initial.body[0].kind,'Creación');
-  assert.match(initial.body[0].observation,/con imagen/);
-  await request(server).post(`/api/requests/${result.body.id}/image`).field('actor','Técnico').attach('image',image,{filename:'solucion.png',contentType:'image/png'}).expect(201);
-  const later=await request(server).get(`/api/requests/${result.body.id}/history`).expect(200);
-  assert.equal(later.body.length,2);assert.equal(later.body[0].kind,'Edición');assert.equal(later.body[0].actor,'Técnico');
+test('Imagen del problema: creación única, consulta y bloqueo de reemplazo/eliminación',async()=>{
+  const server=app.getHttpServer();const created=await createWithProblemImage();const id=created.body.id;const path=created.body.image_path;
+  assert.match(path,new RegExp(`^${id}/.+\\.webp$`));assert.ok(storedImages.has(path));assert.equal((await sharp(storedImages.get(path)!).metadata()).format,'webp');
+  const initial=await request(server).get(`/api/requests/${id}/history`).expect(200);assert.equal(initial.body.length,1);assert.equal(initial.body[0].kind,'Creación');
+  const detail=await request(server).get(`/api/requests/${id}`).expect(200);assert.ok(detail.body.image_url);assert.equal(detail.body.solution_image_url,null);
+  await request(server).post(`/api/requests/${id}/image`).field('actor','Otro técnico').attach('image',await picture(),'otra.png').expect(409);
+  await request(server).delete(`/api/requests/${id}/image`).send({actor:'Otro técnico'}).expect(409);
+  const unchanged=await request(server).get(`/api/requests/${id}`).expect(200);assert.equal(unchanged.body.image_path,path);assert.ok(storedImages.has(path));
+  const history=await request(server).get(`/api/requests/${id}/history`).expect(200);assert.equal(history.body.length,1);
+});
+test('Editar datos conserva la imagen original y rechaza referencias de imagen en el DTO',async()=>{
+  const server=app.getHttpServer();const created=await createWithProblemImage();const id=created.body.id;
+  await request(server).put(`/api/requests/${id}`).send({...payload,priority:'Media',title:'Falla de conexión corregida en el título',actor:'Técnico'}).expect(200);
+  const detail=await request(server).get(`/api/requests/${id}`).expect(200);assert.equal(detail.body.image_path,created.body.image_path);
+  await request(server).put(`/api/requests/${id}`).send({...payload,actor:'Técnico',image_path:null}).expect(400);
+  await request(server).put(`/api/requests/${id}`).send({...payload,actor:'Técnico',solution_image_path:'inventada'}).expect(400);
+});
+test('Resolver con imagen de solución conserva ambas evidencias y audita responsable y fecha',async()=>{
+  const server=app.getHttpServer();const created=await createWithProblemImage('Crítica');const id=created.body.id;await beginWork(id);
+  const resolved=await request(server).patch(`/api/requests/${id}/status`).field('status','Resuelta').field('actor','Andrés soporte').field('observation','Se restauró la conectividad y se verificó la solución.').attach('image',await picture(),{filename:'solucion.png',contentType:'image/png'}).expect(200);
+  assert.equal(resolved.body.status,'Resuelta');assert.equal(resolved.body.image_path,created.body.image_path);assert.match(resolved.body.solution_image_path,new RegExp(`^${id}/solution-.+\\.webp$`));
+  assert.equal(resolved.body.solution_image_actor,'Andrés soporte');assert.ok(Number.isFinite(Date.parse(resolved.body.solution_image_at)));
+  assert.ok(storedImages.has(created.body.image_path));assert.ok(storedImages.has(resolved.body.solution_image_path));
+  const detail=await request(server).get(`/api/requests/${id}`).expect(200);assert.ok(detail.body.image_url);assert.ok(detail.body.solution_image_url);assert.notEqual(detail.body.image_url,detail.body.solution_image_url);
+  const events=await request(server).get(`/api/requests/${id}/history`).expect(200);assert.equal(events.body.length,4);assert.equal(events.body[0].kind,'Evidencia');assert.equal(events.body[0].observation,'Evidencia de solución añadida');assert.equal(events.body[0].actor,'Andrés soporte');assert.equal(events.body[1].kind,'Estado');
+});
+test('La evidencia de solución es opcional, incluso sin imagen inicial',async()=>{
+  const server=app.getHttpServer();const created=await request(server).post('/api/requests').send({...payload,priority:'Media'}).expect(201);await beginWork(created.body.id);
+  await request(server).patch(`/api/requests/${created.body.id}/status`).send({status:'Resuelta',actor:'Técnico'}).expect(200);
+  const detail=await request(server).get(`/api/requests/${created.body.id}`).expect(200);assert.equal(detail.body.image_url,null);assert.equal(detail.body.solution_image_url,null);
+  const events=await request(server).get(`/api/requests/${created.body.id}/history`).expect(200);assert.equal(events.body.length,3);assert.equal(events.body.some((event:any)=>event.kind==='Evidencia'),false);
+});
+test('Evidencia: rechaza adjunto fuera de resolución y crítica sin observación antes de subir',async()=>{
+  const server=app.getHttpServer();const created=await createWithProblemImage('Crítica');const id=created.body.id;const count=storedImages.size;
+  await request(server).patch(`/api/requests/${id}/status`).field('status','En progreso').field('actor','Técnico').attach('image',await picture(),'imagen.png').expect(400);
+  await request(server).patch(`/api/requests/${id}/status`).field('status','Resuelta').field('actor','Técnico').field('observation','Probando').attach('image',await picture(),'imagen.png').expect(409);
+  await beginWork(id);
+  await request(server).patch(`/api/requests/${id}/status`).field('status','Resuelta').field('actor','Técnico').attach('image',await picture(),'imagen.png').expect(400);
+  await request(server).patch(`/api/requests/${id}/status`).send({status:'Resuelta',actor:'Técnico',observation:'Solución',solution_image_path:'inventada'}).expect(400);
+  assert.equal(storedImages.size,count);
+});
+test('Evidencia: contenido falso, múltiples archivos, actor inválido y exceso de payload',async()=>{
+  const server=app.getHttpServer();const created=await request(server).post('/api/requests').send({...payload,priority:'Media'}).expect(201);const id=created.body.id;await beginWork(id);const url=`/api/requests/${id}/status`;const image=await picture();
+  await request(server).patch(url).field('status','Resuelta').field('actor','Técnico').attach('image',Buffer.from('<script>alert(1)</script>'),{filename:'falsa.png',contentType:'image/png'}).expect(400);
+  await request(server).patch(url).field('status','Resuelta').field('actor','x').attach('image',image,'a.png').expect(400);
+  await request(server).patch(url).field('status','Resuelta').field('actor','Técnico').attach('image',image,'a.png').attach('image',image,'b.png').expect(400);
+  await request(server).patch(url).field('status','Resuelta').field('actor','Técnico').attach('image',Buffer.alloc(3*1024*1024+1),'grande.png').expect(413);
+  const detail=await request(server).get(`/api/requests/${id}`).expect(200);assert.equal(detail.body.status,'En progreso');assert.equal(detail.body.solution_image_path,null);
+});
+test('Si falla la resolución se limpia solo el nuevo archivo y se conserva el problema',async()=>{
+  const server=app.getHttpServer();const created=await createWithProblemImage();const id=created.body.id;await beginWork(id);const count=storedImages.size;
+  const provider=app.get(Database);const original=provider.rpc;provider.rpc=(async(operation:string,data:object)=>{if(operation==='status')throw new Error('Fallo simulado');return original(operation,data);}) as any;
+  try{await request(server).patch(`/api/requests/${id}/status`).field('status','Resuelta').field('actor','Técnico').attach('image',await picture(),'solucion.png').expect(500);}
+  finally{provider.rpc=original;}
+  assert.equal(storedImages.size,count);assert.ok(storedImages.has(created.body.image_path));
+  const detail=await request(server).get(`/api/requests/${id}`).expect(200);assert.equal(detail.body.status,'En progreso');assert.equal(detail.body.solution_image_path,null);
+});
+test('Estado, referencia y ambos eventos se revierten si falla el evento de evidencia',async()=>{
+  const server=app.getHttpServer();const created=await createWithProblemImage();const id=created.body.id;await beginWork(id);const count=storedImages.size;
+  await db.exec("CREATE FUNCTION public.test_reject_evidence() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.kind='Evidencia' THEN RAISE EXCEPTION 'Fallo simulado de evidencia'; END IF; RETURN NEW; END; $$; CREATE TRIGGER test_evidence_failure BEFORE INSERT ON public.request_history FOR EACH ROW EXECUTE FUNCTION public.test_reject_evidence();");
+  try{await request(server).patch(`/api/requests/${id}/status`).field('status','Resuelta').field('actor','Técnico').attach('image',await picture(),'solucion.png').expect(503);}
+  finally{await db.exec('DROP TRIGGER test_evidence_failure ON public.request_history; DROP FUNCTION public.test_reject_evidence();');}
+  const detail=await request(server).get(`/api/requests/${id}`).expect(200);assert.equal(detail.body.status,'En progreso');assert.equal(detail.body.solution_image_path,null);assert.equal(detail.body.solution_image_actor,null);
+  const events=await request(server).get(`/api/requests/${id}/history`).expect(200);assert.equal(events.body.length,2);assert.equal(storedImages.size,count);
+});
+test('SQL impide modificar/eliminar la imagen original, aunque se evite el controlador',async()=>{
+  const created=await createWithProblemImage();const id=created.body.id;
+  await assert.rejects(db.query('UPDATE support_requests SET image_path=NULL WHERE id=$1',[id]),(error:any)=>error.code==='PT409');
+  await assert.rejects(db.query('UPDATE support_requests SET image_path=$2 WHERE id=$1',[id,`${id}/11111111-1111-1111-1111-111111111111.webp`]),(error:any)=>error.code==='PT409');
+  await assert.rejects(db.query("SELECT public.support_api('image',$1::jsonb)",[JSON.stringify({id,path:null,actor:'Técnico'})]),(error:any)=>error.code==='PT409');
+});
+test('La evidencia ya guardada también es inmutable y la solicitud no se reabre',async()=>{
+  const server=app.getHttpServer();const created=await createWithProblemImage();const id=created.body.id;await beginWork(id);
+  await request(server).patch(`/api/requests/${id}/status`).field('status','Resuelta').field('actor','Técnico').attach('image',await picture(),'solucion.png').expect(200);
+  const count=storedImages.size;
+  await assert.rejects(db.query('UPDATE support_requests SET solution_image_path=NULL WHERE id=$1',[id]),(error:any)=>error.code==='PT409');
+  await assert.rejects(db.query("UPDATE support_requests SET solution_image_actor='Otra persona' WHERE id=$1",[id]),(error:any)=>error.code==='PT409');
+  await request(server).patch(`/api/requests/${id}/status`).field('status','Resuelta').field('actor','Otro técnico').attach('image',await picture(),'otra.png').expect(409);
+  await request(server).patch(`/api/requests/${id}/status`).send({status:'En progreso',actor:'Técnico'}).expect(400);
+  assert.equal(storedImages.size,count);
 });
 test('Crear con imagen inválida no crea solicitud ni historial',async()=>{
   const server=app.getHttpServer();const before=await db.query<{total:number}>('SELECT count(*)::int AS total FROM support_requests');
@@ -184,13 +225,33 @@ test('Crear con imagen inválida no crea solicitud ni historial',async()=>{
   await creation.attach('image',Buffer.from('no es una imagen'),{filename:'falso.png',contentType:'image/png'}).expect(400);
   const after=await db.query<{total:number}>('SELECT count(*)::int AS total FROM support_requests');assert.equal(after.rows[0].total,before.rows[0].total);
 });
-
-test('Imagen inicial: exige migración atómica antes de subir o crear datos',async()=>{
+test('Migración requerida: no se suben archivos si falta el soporte de evidencias separadas',async()=>{
   const server=app.getHttpServer();const provider=app.get(Database);const original=provider.rpc;const count=storedImages.size;
-  provider.rpc=(async(operation:string,data:object)=>operation==='health'?{status:'ok'}:original(operation,data)) as any;
-  const image=await sharp({create:{width:8,height:8,channels:3,background:'#fff'}}).png().toBuffer();
+  provider.rpc=(async(operation:string,data:object)=>operation==='health'?{status:'ok',image_creation_atomic:true}:original(operation,data)) as any;
   let creation=request(server).post('/api/requests');for(const [field,value] of Object.entries(payload))creation=creation.field(field,value);
-  try{const result=await creation.attach('image',image,{filename:'inicial.png',contentType:'image/png'}).expect(503);assert.match(result.body.message,/005_atomic/);}
+  try{const result=await creation.attach('image',await picture(),{filename:'inicial.png',contentType:'image/png'}).expect(503);assert.match(result.body.message,/006_problem/);}
   finally{provider.rpc=original;}
   assert.equal(storedImages.size,count);
+});
+
+test('Resolver puede adjuntar evidencia aunque no hubiera imagen del problema',async()=>{
+  const server=app.getHttpServer();const created=await request(server).post('/api/requests').send({...payload,priority:'Media'}).expect(201);const id=created.body.id;await beginWork(id);
+  await request(server).patch(`/api/requests/${id}/status`).field('status','Resuelta').field('actor','Técnico').attach('image',await picture(),'solucion.png').expect(200);
+  const detail=await request(server).get(`/api/requests/${id}`).expect(200);assert.equal(detail.body.image_path,null);assert.equal(detail.body.image_url,null);assert.ok(detail.body.solution_image_url);
+});
+test('La migración de evidencias se puede repetir sin cambiar datos ni historial',async()=>{
+  const records=await db.query('SELECT id,image_path,solution_image_path,solution_image_actor,solution_image_at,status,updated_at FROM support_requests ORDER BY id');
+  const events=await db.query('SELECT * FROM request_history ORDER BY id');
+  await db.exec(readFileSync(resolve(__dirname,'../../supabase/migrations/006_problem_and_solution_images.sql'),'utf8'));
+  assert.deepEqual((await db.query('SELECT id,image_path,solution_image_path,solution_image_actor,solution_image_at,status,updated_at FROM support_requests ORDER BY id')).rows,records.rows);
+  assert.deepEqual((await db.query('SELECT * FROM request_history ORDER BY id')).rows,events.rows);
+});
+test('service_role puede resolver con evidencia y ejecutar los triggers de protección',async()=>{
+  await db.exec('SET ROLE service_role');
+  try{
+    const created=await db.query<{data:any}>("SELECT public.support_api('create',$1::jsonb) AS data",[JSON.stringify({...payload,priority:'Media'})]);const id=created.rows[0].data.id;
+    await db.query("SELECT public.support_api('status',$1::jsonb)",[JSON.stringify({id,status:'En progreso',actor:'Técnico'})]);
+    const resolved=await db.query<{data:any}>("SELECT public.support_api('status',$1::jsonb) AS data",[JSON.stringify({id,status:'Resuelta',actor:'Técnico',solution_image_path:`${id}/solution-11111111-1111-4111-8111-111111111111.webp`})]);
+    assert.equal(resolved.rows[0].data.status,'Resuelta');assert.equal(resolved.rows[0].data.solution_image_actor,'Técnico');
+  }finally{await db.exec('RESET ROLE');}
 });

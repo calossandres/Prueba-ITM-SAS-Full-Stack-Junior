@@ -7,8 +7,8 @@ El repositorio es un monorepo con dos aplicaciones: `frontend` (Next.js) y `back
 - Ejecutar las pruebas y la compilación antes del commit.
 - Guardar los avances en develop e integrar develop hacia main.
 - Subir develop y main con Push origin en GitHub Desktop.
-- En Supabase, ejecutar las migraciones en orden: 001, 002, 003, 004 y 005. Si las anteriores ya se ejecutaron, aplicar solo las pendientes.
-- La 004 crea el bucket privado `request-images`; la 005 corrige el historial inicial para que adjuntar una imagen durante la creación no genere una edición adicional.
+- En Supabase, ejecutar las migraciones en orden: 001, 002, 003, 004, 005 y 006. Si las anteriores ya se ejecutaron, aplicar solo las pendientes.
+- La 004 crea el bucket privado `request-images`; la 005 corrige el historial inicial y la 006 fija la imagen del problema y permite otra imagen de solución al resolver.
 - No subir `.env.local`, claves, `node_modules`, `.next` ni `dist`.
 
 ## 2. Publicar primero NestJS
@@ -26,7 +26,7 @@ SUPABASE_SECRET_KEY=sb_secret_TU_CLAVE
 
 6. No copiar `PORT` ni `DATABASE_URL` de la configuración local. Vercel administra el puerto y la ejecución.
 7. Deploy. Copiar la URL de producción, por ejemplo `https://mesa-api.vercel.app`.
-8. Visitar `https://mesa-api.vercel.app/api/health`. Debe devolver status ok; con la migración 005 también aparece image_creation_atomic true.
+8. Visitar `https://mesa-api.vercel.app/api/health`. Debe devolver status ok; con las migraciones 005/006 también aparecen image_creation_atomic y evidence_images en true.
 
 ## 3. Publicar Next.js
 
@@ -53,7 +53,8 @@ El proxy usa la URL de producción pública del backend. Una URL de preview prot
 - Abrir la aplicación desde PC, tablet y celular.
 - Crear una solicitud, recargar y comprobar persistencia.
 - Crear otra con una captura: su historial inicial debe mostrar únicamente Creación.
-- Reemplazar la imagen después: aparece Edición con responsable y fecha.
+- Confirmar que la imagen inicial no pueda reemplazarse ni eliminarse.
+- Resolver adjuntando una captura de solución: ambas se conservan y aparece el evento de evidencia.
 - Cambiar estados, revisar el historial, filtrar y paginar.
 - Probar la regla de observación obligatoria para resolver una crítica.
 
@@ -65,7 +66,7 @@ El archivo original puede tener hasta 500 MB. El navegador comprueba su cabecera
 
 El backend recibe el archivo optimizado, valida su contenido con Sharp y lo vuelve a codificar como WebP. El cuerpo multipart tiene un límite técnico de 3 MiB, inferior al límite de Vercel Functions de 4.5 MB. El bucket acepta solo WebP optimizado y tiene límite de 3 MiB. Esto no modifica el límite de selección original de 500 MB.
 
-Los archivos se guardan en un bucket privado y se consultan mediante enlaces firmados de 10 minutos. Volver a abrir el detalle renueva el enlace. Se limpian los archivos sustituidos o retirados después de actualizar la base; si la limpieza externa falla, se registra y puede quedar un archivo huérfano que debe limpiarse posteriormente.
+Los archivos se guardan en un bucket privado y se consultan mediante enlaces firmados de 10 minutos. Volver a abrir el detalle renueva el enlace. Las evidencias confirmadas se conservan. Solo se intenta limpiar un archivo nuevo si falla su operación SQL; si esa limpieza externa falla, se registra para revisión posterior.
 
 ## Referencias oficiales
 

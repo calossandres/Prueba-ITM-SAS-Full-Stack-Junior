@@ -76,10 +76,10 @@ El historial devuelve una lista de eventos con kind, from_status, to_status, act
 
 La API no implementa autenticación de usuarios; el campo actor es declarativo. La clave del proveedor nunca forma parte de las respuestas.
 
-## Imagen opcional
+## Imágenes de problema y solución
 
-POST /requests acepta también multipart/form-data con los cinco campos de creación y un archivo image. El registro con imagen genera un único evento Creación. El original se optimiza en el navegador; el backend valida y recodifica el resultado.
+POST /requests acepta JSON o multipart con los cinco campos de creación e image opcional. Esa imagen del problema se conserva sin posibilidad de reemplazarla o eliminarla.
 
-POST /requests/:id/image permite añadir o reemplazar la imagen de una solicitud abierta mediante multipart con actor e image. DELETE /requests/:id/image recibe JSON con actor para retirarla. Estos cambios posteriores generan un evento Edición. GET /requests/:id añade image_path e image_url firmada.
+PATCH /requests/:id/status acepta también multipart con status, actor, observation e image opcional, únicamente al pasar de En progreso a Resuelta. La referencia de solución y el cierre se confirman juntos, con un evento Evidencia de solución añadida. La observación de críticas sigue siendo obligatoria.
 
-Consultar [IMAGENES.md](IMAGENES.md) para límites, almacenamiento y consistencia.
+Las antiguas rutas POST/DELETE /requests/:id/image responden 409. GET /requests/:id devuelve ambas referencias, URLs firmadas y responsable/fecha de la solución. Consultar [IMAGENES.md](IMAGENES.md).

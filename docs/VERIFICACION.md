@@ -69,9 +69,10 @@ La publicación remota y los resultados manuales deben verificarse antes de decl
 ## Imagen e historial inicial
 
 - Crear con imagen: exactamente un evento Creación.
-- Añadir o reemplazar una imagen después: nuevo evento Edición con responsable y fecha.
+- Intentar reemplazar o borrar la imagen inicial: rechazado.
+- Resolver con captura: estado Resuelta, ambas imágenes conservadas y evento Evidencia de solución añadida con responsable y fecha.
 - Archivo inválido durante la creación: no debe quedar una solicitud creada parcialmente.
 - Intentar una imagen original mayor de 500 MB: se rechaza antes de leerla completa.
 - Verificar que el enlace de detalle abre la imagen ampliada y que el bucket no es público.
 
-Aplicar primero las migraciones 003, 004 y 005. Las 34 pruebas automáticas actuales incluyen estas reglas.
+Aplicar las migraciones pendientes hasta la 006. Las pruebas automáticas incluyen inmutabilidad, imágenes separadas y reversión del estado y de la evidencia si falla su historial.
